@@ -198,12 +198,32 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
   //       setUploads((prev) => [...prev, newUpload]);
 
   //       const media = await api.upload(file, palace.id, (progress) => {
+  //         // During upload, only update progress and mediaId, maintain uploading status
   //         setUploads((prev) =>
   //           prev.map((u) =>
-  //             u.filename === file.name ? { ...u, ...progress } : u
+  //             u.filename === file.name
+  //               ? {
+  //                   ...u,
+  //                   mediaId: progress.mediaId,
+  //                   progress: progress.progress,
+  //                 }
+  //               : u
   //           )
   //         );
   //       });
+
+  //       // After upload completes, update uploads with media status
+  //       setUploads((prev) =>
+  //         prev.map((u) =>
+  //           u.filename === file.name
+  //             ? {
+  //                 ...u,
+  //                 mediaId: media.id,
+  //                 status: media.status, // This will be "uploading" or "processing" from the API
+  //               }
+  //             : u
+  //         )
+  //       );
 
   //       // Add the new media to the list
   //       setMediaItems((prev) => [...prev, media]);
@@ -219,65 +239,94 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
   //   }
   // };
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  //New handle file upload to better handle concurrent uploads
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
-
+  
     setShowUploadPanel(true);
-
-    for (const file of Array.from(files)) {
+  
+    // Create a stable reference for tracking uploads
+    const uploadTracker = new Map<string, string>(); // filename -> mediaId
+  
+    const uploadPromises = Array.from(files).map(async (file) => {
       try {
-        // Initialize upload state
+        // Initialize upload state with unique identifier
         const newUpload: UploadState = {
           mediaId: "",
           filename: file.name,
           progress: 0,
           status: "uploading",
         };
-
+  
         setUploads((prev) => [...prev, newUpload]);
-
+  
         const media = await api.upload(file, palace.id, (progress) => {
-          // During upload, only update progress and mediaId, maintain uploading status
+          // Track mediaId for this file
+          if (progress.mediaId) {
+            uploadTracker.set(file.name, progress.mediaId);
+          }
+  
+          // Update progress maintaining correct status
           setUploads((prev) =>
             prev.map((u) =>
-              u.filename === file.name
-                ? {
-                    ...u,
+              u.filename === file.name 
+                ? { 
+                    ...u, 
                     mediaId: progress.mediaId,
                     progress: progress.progress,
-                  }
+                    // Keep existing status unless explicitly changed
+                    status: u.status === "error" ? "error" : "uploading"
+                  } 
                 : u
             )
           );
         });
-
-        // After upload completes, update uploads with media status
+  
+        // After successful upload, update to processing state
         setUploads((prev) =>
           prev.map((u) =>
-            u.filename === file.name
-              ? {
-                  ...u,
+            u.filename === file.name 
+              ? { 
+                  ...u, 
                   mediaId: media.id,
-                  status: media.status, // This will be "uploading" or "processing" from the API
-                }
+                  progress: 100,
+                  status: "processing"
+                } 
               : u
           )
         );
-
-        // Add the new media to the list
-        setMediaItems((prev) => [...prev, media]);
+  
+        return media;
+  
       } catch (err) {
         const error = err instanceof Error ? err.message : "Upload failed";
         setUploads((prev) =>
           prev.map((u) =>
-            u.filename === file.name ? { ...u, status: "error", error } : u
+            u.filename === file.name 
+              ? { ...u, status: "error", error } 
+              : u
           )
         );
         onError(error);
       }
+    });
+  
+    try {
+      const results = await Promise.allSettled(uploadPromises);
+      const successfulMedia = results
+        .filter((result): result is PromiseFulfilledResult<Media> => 
+          result.status === "fulfilled"
+        )
+        .map(result => result.value);
+      
+      // Update media items state
+      setMediaItems(prev => [...prev, ...successfulMedia]);
+  
+      // The existing useEffect polling mechanism will handle subsequent status updates
+      // as it's already designed to handle multiple media items
+    } catch (error) {
+      console.error('Batch upload error:', error);
     }
   };
 
