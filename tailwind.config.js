@@ -1,12 +1,12 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+const config = {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
-	],
+    './index.html',           // If you want Tailwind classes from HTML
+    './src/**/*.{ts,tsx}',    // Captures all .ts and .tsx files in src and its subfolders
+  ],
+  
+  prefix: "",
   theme: {
     container: {
       center: true,
@@ -74,3 +74,5 @@ module.exports = {
   },
   plugins: [require("tailwindcss-animate")],
 }
+
+module.exports = config

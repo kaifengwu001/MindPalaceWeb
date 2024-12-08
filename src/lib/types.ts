@@ -49,7 +49,7 @@ export interface Vector3 {
     contentType: string;
     size: number;
     uploadDate: number;
-    type: 'image' | 'video' | 'text';
+    type: "image" | "video" | "text";
     status: MediaStatus;
     palaceId?: string;
     sphereId?: string;
