@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "./components/layout/Header";
 import { AuthForm } from "./components/AuthForm";
 import { PalaceList } from "./components/PalaceList";
