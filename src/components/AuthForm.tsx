@@ -15,7 +15,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 interface AuthFormProps {
   onAuthSuccess: (user: Record<string, unknown>) => void;
 }
-
+ 
 export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isEmailCodeSignIn, setIsEmailCodeSignIn] = useState(false);
