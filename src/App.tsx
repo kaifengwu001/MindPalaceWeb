@@ -11,6 +11,8 @@ import { Button } from "./components/ui/button";
 import { createApiClient } from "./lib/api";
 import type { Palace } from "./lib/types";
 
+
+
 // Initialize API client
 const api = createApiClient({
   baseUrl: import.meta.env.VITE_APP_API_URL,
