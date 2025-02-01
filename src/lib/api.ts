@@ -243,21 +243,103 @@ export class ApiClient {
 
 
 // Then update the getMedia method to properly handle the type checking
+// async getMedia(): Promise<Media[]> {
+//   try {
+//     const mediaList = await this.get<MediaResponse[]>('/media');
+    
+//     const mediaPromises = mediaList.map(async (item) => {
+//       try {
+//         const { url, thumbnailUrl } = await this.get<MediaStatusResponse>(`/media/${item.id}`);
+        
+//         const media: Media = {
+//           id: item.id,
+//           userId: item.userId,
+//           filename: item.filename,
+//           contentType: item.contentType,
+//           size: item.size,
+//           uploadDate: item.uploadDate,
+//           type: item.type,
+//           status: item.status,
+//           palaceId: item.palaceId,
+//           sphereId: item.sphereId,
+//           processingJobId: item.processingJobId,
+//           error: item.error,
+//           url,
+//           thumbnailUrl,
+//           width: item.width,
+//           height: item.height,
+//           duration: item.duration
+//         };
+        
+//         return media;
+//       } catch (error) {
+//         console.error(`Error getting pre-signed URLs for media ${item.id}:`, error);
+//         return undefined;
+//       }
+//     });
+
+//     const mediaResults = await Promise.all(mediaPromises);
+//     return mediaResults.filter((item): item is Media => item !== undefined);
+//   } catch (error) {
+//     console.error('Error in getMedia:', error);
+//     return [];
+//   }
+// }
+
 async getMedia(): Promise<Media[]> {
   try {
-    const mediaList = await this.get<MediaResponse[]>('/media');
-    
-    const mediaPromises = mediaList.map(async (item) => {
-      try {
-        const { url, thumbnailUrl } = await this.get<MediaStatusResponse>(`/media/${item.id}`);
-        
-        const media: Media = {
+    // 1. Fetch the main list of media items.
+    const mediaList = await this.get<MediaResponse[]>("/media");
+
+    // 2. For each item, attempt to fetch presigned URLs with exponential backoff.
+    const results = await Promise.all(
+      mediaList.map(async (item) => {
+        let url: string | undefined;
+        let thumbnailUrl: string | undefined;
+
+        const RETRY_LIMIT = 3;
+        const BASE_DELAY_MS = 500; // Base delay of 500ms; adjust as needed.
+        let attempt = 0;
+        let success = false;
+        let lastError: unknown;
+
+        while (!success && attempt < RETRY_LIMIT) {
+          attempt++;
+          try {
+            const statusResp = await this.get<MediaStatusResponse>(`/media/${item.id}`);
+            url = statusResp.url;
+            thumbnailUrl = statusResp.thumbnailUrl;
+            success = true;
+          } catch (err) {
+            lastError = err;
+            console.warn(
+              `Attempt ${attempt} failed for media item ${item.id}:`,
+              err
+            );
+            // Exponential backoff: delay increases as 2^attempt * BASE_DELAY_MS.
+            const delayTime = Math.pow(2, attempt) * BASE_DELAY_MS;
+            await new Promise((resolve) => setTimeout(resolve, delayTime));
+          }
+        }
+
+        if (!success) {
+          console.error(
+            `Failed to retrieve presigned URLs for media item ${item.id} after ${RETRY_LIMIT} attempts.`,
+            lastError
+          );
+          // We retain the item even if the URL fetching failed.
+          // The url and thumbnailUrl will remain undefined.
+        }
+
+        // 3. Return the combined media item.
+        return {
           id: item.id,
           userId: item.userId,
           filename: item.filename,
           contentType: item.contentType,
           size: item.size,
           uploadDate: item.uploadDate,
+          lastModified: item.lastModified,
           type: item.type,
           status: item.status,
           palaceId: item.palaceId,
@@ -266,25 +348,20 @@ async getMedia(): Promise<Media[]> {
           error: item.error,
           url,
           thumbnailUrl,
+          duration: item.duration,
           width: item.width,
           height: item.height,
-          duration: item.duration
-        };
-        
-        return media;
-      } catch (error) {
-        console.error(`Error getting pre-signed URLs for media ${item.id}:`, error);
-        return undefined;
-      }
-    });
+        } as Media;
+      })
+    );
 
-    const mediaResults = await Promise.all(mediaPromises);
-    return mediaResults.filter((item): item is Media => item !== undefined);
+    return results;
   } catch (error) {
-    console.error('Error in getMedia:', error);
+    console.error("Error in getMedia:", error);
     return [];
   }
 }
+
 
 // Update getMediaStatus to use the same Media type
 async getMediaStatus(mediaId: string): Promise<Media> {
