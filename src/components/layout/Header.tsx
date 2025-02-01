@@ -14,7 +14,7 @@ export const Header = ({ userEmail, onSignOut }: HeaderProps) => {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <h1 className="text-xl font-bold text-gray-900">
-              Mind Palace Test Portal
+              Welcome to Mind Palace Upload Portal
             </h1>
           </div>
           
