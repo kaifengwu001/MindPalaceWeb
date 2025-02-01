@@ -237,7 +237,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
       // Step 1: Ask for email
       formContent = (
         <>
-          <CardTitle>Reset Password</CardTitle>
+          <CardTitle className="mb-6">Reset Password</CardTitle>
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
@@ -264,7 +264,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
       // Step 2: Code + New Password
       formContent = (
         <>
-          <CardTitle>Enter Reset Code</CardTitle>
+          <CardTitle className="mb-6">Enter Reset Code</CardTitle>
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
@@ -301,7 +301,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
     // (a) "Verify Email" after Sign Up
     formContent = (
       <>
-        <CardTitle>Verify Email</CardTitle>
+        <CardTitle className="mb-6">Verify Email</CardTitle>
         {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
@@ -332,7 +332,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
       // Step A: Request code
       formContent = (
         <>
-          <CardTitle>Sign In with Email Code</CardTitle>
+          <CardTitle className="mb-6">Sign In with Email Code</CardTitle>
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
@@ -359,7 +359,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
       // Step B: Verify the code
       formContent = (
         <>
-          <CardTitle>Enter Code from Email</CardTitle>
+          <CardTitle className="mb-6">Enter Code from Email</CardTitle>
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
@@ -389,7 +389,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
 
     formContent = (
       <>
-        <CardTitle>{heading}</CardTitle>
+        <CardTitle className="mb-6">{heading}</CardTitle>
         {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
@@ -421,6 +421,18 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
         </form>
 
         {/* Forgot Password Link (visible only on sign in) */}
+        <div className="mt-4 flex justify-between items-center">
+
+        <button
+          onClick={() => {
+            setIsSignUp(!isSignUp);
+            setError(null);
+          }}
+          className="mt-4 text-sm text-blue-500 hover:text-blue-600"
+        >
+          {isSignUp ? "Already have an account? Sign In" : "Need an account? Sign Up"}
+        </button>
+
         {!isSignUp && (
           <button
             type="button"
@@ -437,16 +449,8 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
             Forgot password?
           </button>
         )}
-
-        <button
-          onClick={() => {
-            setIsSignUp(!isSignUp);
-            setError(null);
-          }}
-          className="mt-4 text-sm text-blue-500 hover:text-blue-600"
-        >
-          {isSignUp ? "Already have an account? Sign In" : "Need an account? Sign Up"}
-        </button>
+        
+        </div>
       </>
     );
   }
