@@ -1,3 +1,4 @@
+//src/lib/api.ts
 import { Amplify } from "aws-amplify";
 import { fetchAuthSession } from "aws-amplify/auth";
 import type {

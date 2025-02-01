@@ -3,8 +3,10 @@ import {
   signUp,
   confirmSignUp,
   signIn,
-  type SignInOutput,
-  confirmSignIn
+  confirmSignIn,
+  resetPassword,
+  confirmResetPassword,
+  type SignInOutput
 } from "aws-amplify/auth";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -35,6 +37,12 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
   // Error and loading indicators
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Forgot password flow
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isResetCodeSent, setIsResetCodeSent] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   // ---------------------------------------------------------------------
   // (1) Sign Up with Email + Password
@@ -77,11 +85,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
       });
 
       // After confirmation, attempt to sign in
-      const signInResult = await signIn({
-        username: email,
-        password
-      });
-
+      const signInResult = await signIn({ username: email, password });
       if (signInResult.isSignedIn) {
         onAuthSuccess({
           email,
@@ -104,11 +108,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
     setError(null);
 
     try {
-      const signInResult = await signIn({
-        username: email,
-        password
-      });
-
+      const signInResult = await signIn({ username: email, password });
       if (signInResult.isSignedIn) {
         onAuthSuccess({
           email,
@@ -132,12 +132,8 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
     setError(null);
 
     try {
-      // signIn with just email triggers custom challenge
-      const signInResult = await signIn({
-        username: email
-      });
-      
-      if (signInResult.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_CUSTOM_CHALLENGE') {
+      const signInResult = await signIn({ username: email });
+      if (signInResult.nextStep?.signInStep === "CONFIRM_SIGN_IN_WITH_CUSTOM_CHALLENGE") {
         setChallengeUser(signInResult);
         setCodeSent(true);
       } else {
@@ -160,11 +156,7 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
       if (!challengeUser) {
         throw new Error("No user challenge in progress.");
       }
-
-      const result = await confirmSignIn({
-        challengeResponse: code
-      });
-
+      const result = await confirmSignIn({ challengeResponse: code });
       if (result.isSignedIn) {
         onAuthSuccess({
           email,
@@ -181,11 +173,131 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
   };
 
   // ---------------------------------------------------------------------
+  // (5) Forgot Password Flow
+  // ---------------------------------------------------------------------
+  // Step A: Request the reset code
+  const handleForgotPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      await resetPassword({ username: email });
+      setIsResetCodeSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send reset code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step B: Confirm the reset code + new password
+  const handleConfirmForgotPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      await confirmResetPassword({
+        username: email,
+        confirmationCode: resetCode,
+        newPassword
+      });
+
+      // Attempt auto sign-in with new password
+      const signInResult = await signIn({ username: email, password: newPassword });
+      if (signInResult.isSignedIn) {
+        onAuthSuccess({
+          email,
+          nextStep: signInResult.nextStep
+        });
+      }
+
+      // Alternatively, if you don't want to auto sign-in:
+      // setIsResettingPassword(false);
+      // setIsResetCodeSent(false);
+      // setResetCode("");
+      // setNewPassword("");
+      // setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------
   // Render the appropriate UI
   // ---------------------------------------------------------------------
   let formContent: JSX.Element;
 
-  if (needsVerification) {
+  if (isResettingPassword) {
+    // Forgot Password Flow
+    if (!isResetCodeSent) {
+      // Step 1: Ask for email
+      formContent = (
+        <>
+          <CardTitle>Reset Password</CardTitle>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Sending..." : "Send Reset Code"}
+            </Button>
+          </form>
+        </>
+      );
+    } else {
+      // Step 2: Code + New Password
+      formContent = (
+        <>
+          <CardTitle>Enter Reset Code</CardTitle>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <form onSubmit={handleConfirmForgotPassword} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Reset Code</label>
+              <Input
+                type="text"
+                value={resetCode}
+                onChange={(e) => setResetCode(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">New Password</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Resetting..." : "Set New Password"}
+            </Button>
+          </form>
+        </>
+      );
+    }
+  } else if (needsVerification) {
     // (a) "Verify Email" after Sign Up
     formContent = (
       <>
@@ -198,7 +310,9 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
         )}
         <form onSubmit={handleVerification} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Verification Code</label>
+            <label className="block text-sm font-medium mb-1">
+              Verification Code
+            </label>
             <Input
               type="text"
               value={verificationCode}
@@ -306,8 +420,29 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
           </Button>
         </form>
 
+        {/* Forgot Password Link (visible only on sign in) */}
+        {!isSignUp && (
+          <button
+            type="button"
+            className="mt-2 text-sm text-blue-500 hover:text-blue-600"
+            onClick={() => {
+              setIsResettingPassword(true);
+              setIsResetCodeSent(false);
+              setError(null);
+              // Optionally clear email/password if you like
+              // setEmail("");
+              // setPassword("");
+            }}
+          >
+            Forgot password?
+          </button>
+        )}
+
         <button
-          onClick={() => setIsSignUp(!isSignUp)}
+          onClick={() => {
+            setIsSignUp(!isSignUp);
+            setError(null);
+          }}
           className="mt-4 text-sm text-blue-500 hover:text-blue-600"
         >
           {isSignUp ? "Already have an account? Sign In" : "Need an account? Sign Up"}
@@ -330,6 +465,8 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
               setNeedsVerification(false);
               setError(null);
               setIsSignUp(false);
+              setIsResettingPassword(false);
+              setIsResetCodeSent(false);
             }}
             className={`text-sm ${!isEmailCodeSignIn ? "font-semibold" : ""}`}
           >
@@ -340,6 +477,8 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
               setIsEmailCodeSignIn(true);
               setIsSignUp(false);
               setError(null);
+              setIsResettingPassword(false);
+              setIsResetCodeSent(false);
             }}
             className={`text-sm ${isEmailCodeSignIn ? "font-semibold" : ""}`}
           >
@@ -353,6 +492,362 @@ export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
 };
 
 
+// // With Code Login Option but no password recovery
+// import React, { useState } from "react";
+// import {
+//   signUp,
+//   confirmSignUp,
+//   signIn,
+//   type SignInOutput,
+//   confirmSignIn
+// } from "aws-amplify/auth";
+// import { AlertCircle } from "lucide-react";
+// import { Alert, AlertDescription } from "@/components/ui/alert";
+// import { Button } from "@/components/ui/button";
+// import { Input } from "@/components/ui/input";
+// import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+
+// interface AuthFormProps {
+//   onAuthSuccess: (user: Record<string, unknown>) => void;
+// }
+
+// export const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
+//   // ---------------
+//   // State variables
+//   // ---------------
+//   const [isSignUp, setIsSignUp] = useState(false);
+//   const [email, setEmail] = useState("");
+//   const [password, setPassword] = useState("");
+//   const [verificationCode, setVerificationCode] = useState("");
+//   const [needsVerification, setNeedsVerification] = useState(false);
+
+//   // "Sign in with Email Code" (passwordless) flow
+//   const [isEmailCodeSignIn, setIsEmailCodeSignIn] = useState(false);
+//   const [codeSent, setCodeSent] = useState(false);
+//   const [code, setCode] = useState("");
+//   const [challengeUser, setChallengeUser] = useState<SignInOutput | null>(null);
+
+//   // Error and loading indicators
+//   const [error, setError] = useState<string | null>(null);
+//   const [loading, setLoading] = useState(false);
+
+//   // ---------------------------------------------------------------------
+//   // (1) Sign Up with Email + Password
+//   // ---------------------------------------------------------------------
+//   const handleSignUp = async (event: React.FormEvent) => {
+//     event.preventDefault();
+//     setLoading(true);
+//     setError(null);
+
+//     try {
+//       await signUp({
+//         username: email,
+//         password,
+//         options: {
+//           userAttributes: {
+//             email
+//           }
+//         }
+//       });
+//       setNeedsVerification(true);
+//     } catch (err) {
+//       setError(err instanceof Error ? err.message : "Sign up failed");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // ---------------------------------------------------------------------
+//   // (2) Verify Email (after Sign Up)
+//   // ---------------------------------------------------------------------
+//   const handleVerification = async (event: React.FormEvent) => {
+//     event.preventDefault();
+//     setLoading(true);
+//     setError(null);
+
+//     try {
+//       await confirmSignUp({
+//         username: email,
+//         confirmationCode: verificationCode
+//       });
+
+//       // After confirmation, attempt to sign in
+//       const signInResult = await signIn({
+//         username: email,
+//         password
+//       });
+
+//       if (signInResult.isSignedIn) {
+//         onAuthSuccess({
+//           email,
+//           nextStep: signInResult.nextStep
+//         });
+//       }
+//     } catch (err) {
+//       setError(err instanceof Error ? err.message : "Verification failed");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // ---------------------------------------------------------------------
+//   // (3) Sign In with Email + Password
+//   // ---------------------------------------------------------------------
+//   const handleSignIn = async (event: React.FormEvent) => {
+//     event.preventDefault();
+//     setLoading(true);
+//     setError(null);
+
+//     try {
+//       const signInResult = await signIn({
+//         username: email,
+//         password
+//       });
+
+//       if (signInResult.isSignedIn) {
+//         onAuthSuccess({
+//           email,
+//           nextStep: signInResult.nextStep
+//         });
+//       }
+//     } catch (err) {
+//       setError(err instanceof Error ? err.message : "Sign in failed");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // ---------------------------------------------------------------------
+//   // (4) "Sign In with Email Code" Flow (Passwordless)
+//   // ---------------------------------------------------------------------
+//   // Step A: Initiate the code flow
+//   const handleSendCode = async (event: React.FormEvent) => {
+//     event.preventDefault();
+//     setLoading(true);
+//     setError(null);
+
+//     try {
+//       // signIn with just email triggers custom challenge
+//       const signInResult = await signIn({
+//         username: email
+//       });
+      
+//       if (signInResult.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_CUSTOM_CHALLENGE') {
+//         setChallengeUser(signInResult);
+//         setCodeSent(true);
+//       } else {
+//         setError("Unexpected authentication flow");
+//       }
+//     } catch (err) {
+//       setError(err instanceof Error ? err.message : "Could not send code");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // Step B: Verify the one-time code
+//   const handleVerifyCode = async (event: React.FormEvent) => {
+//     event.preventDefault();
+//     setLoading(true);
+//     setError(null);
+
+//     try {
+//       if (!challengeUser) {
+//         throw new Error("No user challenge in progress.");
+//       }
+
+//       const result = await confirmSignIn({
+//         challengeResponse: code
+//       });
+
+//       if (result.isSignedIn) {
+//         onAuthSuccess({
+//           email,
+//           nextStep: result.nextStep
+//         });
+//       } else {
+//         setError("Unexpected challenge. Please try again.");
+//       }
+//     } catch (err) {
+//       setError(err instanceof Error ? err.message : "Invalid code");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // ---------------------------------------------------------------------
+//   // Render the appropriate UI
+//   // ---------------------------------------------------------------------
+//   let formContent: JSX.Element;
+
+//   if (needsVerification) {
+//     // (a) "Verify Email" after Sign Up
+//     formContent = (
+//       <>
+//         <CardTitle>Verify Email</CardTitle>
+//         {error && (
+//           <Alert variant="destructive" className="mb-4">
+//             <AlertCircle className="h-4 w-4" />
+//             <AlertDescription>{error}</AlertDescription>
+//           </Alert>
+//         )}
+//         <form onSubmit={handleVerification} className="space-y-4">
+//           <div>
+//             <label className="block text-sm font-medium mb-1">Verification Code</label>
+//             <Input
+//               type="text"
+//               value={verificationCode}
+//               onChange={(e) => setVerificationCode(e.target.value)}
+//               required
+//             />
+//           </div>
+//           <Button type="submit" className="w-full" disabled={loading}>
+//             {loading ? "Verifying..." : "Verify Email"}
+//           </Button>
+//         </form>
+//       </>
+//     );
+//   } else if (isEmailCodeSignIn) {
+//     // (b) Sign In with Email Code (Passwordless)
+//     if (!codeSent) {
+//       // Step A: Request code
+//       formContent = (
+//         <>
+//           <CardTitle>Sign In with Email Code</CardTitle>
+//           {error && (
+//             <Alert variant="destructive" className="mb-4">
+//               <AlertCircle className="h-4 w-4" />
+//               <AlertDescription>{error}</AlertDescription>
+//             </Alert>
+//           )}
+//           <form onSubmit={handleSendCode} className="space-y-4">
+//             <div>
+//               <label className="block text-sm font-medium mb-1">Email</label>
+//               <Input
+//                 type="email"
+//                 value={email}
+//                 onChange={(e) => setEmail(e.target.value)}
+//                 required
+//               />
+//             </div>
+//             <Button type="submit" className="w-full" disabled={loading}>
+//               {loading ? "Sending..." : "Send Code"}
+//             </Button>
+//           </form>
+//         </>
+//       );
+//     } else {
+//       // Step B: Verify the code
+//       formContent = (
+//         <>
+//           <CardTitle>Enter Code from Email</CardTitle>
+//           {error && (
+//             <Alert variant="destructive" className="mb-4">
+//               <AlertCircle className="h-4 w-4" />
+//               <AlertDescription>{error}</AlertDescription>
+//             </Alert>
+//           )}
+//           <form onSubmit={handleVerifyCode} className="space-y-4">
+//             <div>
+//               <label className="block text-sm font-medium mb-1">Code</label>
+//               <Input
+//                 type="text"
+//                 value={code}
+//                 onChange={(e) => setCode(e.target.value)}
+//                 required
+//               />
+//             </div>
+//             <Button type="submit" className="w-full" disabled={loading}>
+//               {loading ? "Verifying..." : "Verify"}
+//             </Button>
+//           </form>
+//         </>
+//       );
+//     }
+//   } else {
+//     // (c) Default: Sign In or Sign Up with Email + Password
+//     const heading = isSignUp ? "Sign Up" : "Sign In";
+
+//     formContent = (
+//       <>
+//         <CardTitle>{heading}</CardTitle>
+//         {error && (
+//           <Alert variant="destructive" className="mb-4">
+//             <AlertCircle className="h-4 w-4" />
+//             <AlertDescription>{error}</AlertDescription>
+//           </Alert>
+//         )}
+//         <form onSubmit={isSignUp ? handleSignUp : handleSignIn} className="space-y-4">
+//           <div>
+//             <label className="block text-sm font-medium mb-1">Email</label>
+//             <Input
+//               type="email"
+//               value={email}
+//               onChange={(e) => setEmail(e.target.value)}
+//               required
+//             />
+//           </div>
+//           <div>
+//             <label className="block text-sm font-medium mb-1">Password</label>
+//             <Input
+//               type="password"
+//               value={password}
+//               onChange={(e) => setPassword(e.target.value)}
+//               required
+//             />
+//           </div>
+//           <Button type="submit" className="w-full" disabled={loading}>
+//             {loading ? "Processing..." : heading}
+//           </Button>
+//         </form>
+
+//         <button
+//           onClick={() => setIsSignUp(!isSignUp)}
+//           className="mt-4 text-sm text-blue-500 hover:text-blue-600"
+//         >
+//           {isSignUp ? "Already have an account? Sign In" : "Need an account? Sign Up"}
+//         </button>
+//       </>
+//     );
+//   }
+
+//   // ---------------------------------------------------------------------
+//   // Return the card and toggle buttons
+//   // ---------------------------------------------------------------------
+//   return (
+//     <Card className="w-full max-w-md mx-auto">
+//       <CardHeader>
+//         <div className="flex gap-3">
+//           <button
+//             onClick={() => {
+//               setIsEmailCodeSignIn(false);
+//               setCodeSent(false);
+//               setNeedsVerification(false);
+//               setError(null);
+//               setIsSignUp(false);
+//             }}
+//             className={`text-sm ${!isEmailCodeSignIn ? "font-semibold" : ""}`}
+//           >
+//             Email + Password
+//           </button>
+//           <button
+//             onClick={() => {
+//               setIsEmailCodeSignIn(true);
+//               setIsSignUp(false);
+//               setError(null);
+//             }}
+//             className={`text-sm ${isEmailCodeSignIn ? "font-semibold" : ""}`}
+//           >
+//             Sign In with Code
+//           </button>
+//         </div>
+//       </CardHeader>
+//       <CardContent>{formContent}</CardContent>
+//     </Card>
+//   );
+// };
+
+// // OLD without Code Login Option
 // import React, { useState } from 'react';
 // import { signUp, signIn, confirmSignUp } from 'aws-amplify/auth';
 // import { AlertCircle } from 'lucide-react';
