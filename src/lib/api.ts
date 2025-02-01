@@ -240,8 +240,6 @@ export class ApiClient {
     }
   }
 
-
-
 // Then update the getMedia method to properly handle the type checking
 // async getMedia(): Promise<Media[]> {
 //   try {
@@ -286,6 +284,7 @@ export class ApiClient {
 //   }
 // }
 
+
 async getMedia(): Promise<Media[]> {
   try {
     // 1. Fetch the main list of media items.
@@ -298,7 +297,7 @@ async getMedia(): Promise<Media[]> {
         let thumbnailUrl: string | undefined;
 
         const RETRY_LIMIT = 3;
-        const BASE_DELAY_MS = 500; // Base delay of 500ms; adjust as needed.
+        const BASE_DELAY_MS = 150; // Base delay of 500ms; adjust as needed.
         let attempt = 0;
         let success = false;
         let lastError: unknown;
@@ -361,7 +360,6 @@ async getMedia(): Promise<Media[]> {
     return [];
   }
 }
-
 
 // Update getMediaStatus to use the same Media type
 async getMediaStatus(mediaId: string): Promise<Media> {
