@@ -603,7 +603,7 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
                           <span>Error loading media</span>
                         </div>
                       ) : (
-                        <div>Thumbnail not available</div>
+                        <div>Loading Thumbnail...</div>
                       )}
                     </div>
                   )}
