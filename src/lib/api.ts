@@ -7,6 +7,7 @@ import type {
   Media,
   MediaStatus,
   UploadProgress,
+  Connection,
 } from "./types";
 
 export interface ApiConfig {
@@ -417,6 +418,10 @@ async getMediaStatus(mediaId: string): Promise<Media> {
     updates: Partial<Palace>
   ): Promise<Palace> {
     return this.put<Palace>(`/palaces/${palaceId}`, updates);
+  }
+
+  async getConnections(palaceId: string): Promise<Connection[]> {
+    return this.get<Connection[]>(`/palaces/${palaceId}/connections`);
   }
 
   cleanupBlobUrl(url: string | undefined) {

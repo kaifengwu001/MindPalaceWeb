@@ -1,15 +1,16 @@
-// import React, { useState, useEffect } from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Header } from "./components/layout/Header";
 import { AuthForm } from "./components/AuthForm";
 import { PalaceList } from "./components/PalaceList";
-import SpheresGrid from "./components/SpheresGrid";
+import SpheresGrid, { type SpheresGridHandle } from "./components/SpheresGrid";
 import { useAuth } from "./hooks/useAuth";
-import { Alert, AlertDescription } from "./components/ui/alert";
-import { AlertCircle } from "lucide-react";
-import { Button } from "./components/ui/button";
+import { AlertCircle, Upload } from "lucide-react";
 import { createApiClient } from "./lib/api";
-import type { Palace } from "./lib/types";
+import type { Palace, Media } from "./lib/types";
+import { BackgroundLayer } from "./components/BackgroundLayer";
+import { LiquidGlass } from "./components/ui/LiquidGlass";
+import { PalaceViewer3D } from "./components/3d/PalaceViewer3D";
+import { Button } from "./components/ui/button";
 
 
 
@@ -25,15 +26,20 @@ function App() {
   const { authState, loading, signOut, checkAuth } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [palaces, setPalaces] = useState<Palace[]>([]);
+  const [allMedia, setAllMedia] = useState<Media[]>([]);
   const [selectedPalace, setSelectedPalace] = useState<Palace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [palaceStats, setPalaceStats] = useState<{ spheres: number; connections: number } | null>(null);
+  const [mediaCount, setMediaCount] = useState(0);
+  const spheresGridRef = useRef<SpheresGridHandle>(null);
 
   const handleManagePalace = (palace: Palace | null) => {
     if (palace) {
-      console.log("Selected palace:", palace);
       setSelectedPalace(palace);
+      setPalaceStats(null); // Reset stats when selecting new palace
     } else {
       setSelectedPalace(null);
+      setPalaceStats(null);
     }
   };
 
@@ -45,10 +51,11 @@ function App() {
     }
   }, [error]);
 
-  // Fetch palaces when authenticated
+  // Fetch palaces and media when authenticated
   useEffect(() => {
     if (authState.isAuthenticated) {
       fetchPalaces();
+      fetchAllMedia();
     }
   }, [authState.isAuthenticated]);
 
@@ -61,6 +68,15 @@ function App() {
       setError(err instanceof Error ? err.message : "Failed to fetch palaces");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchAllMedia = async () => {
+    try {
+      const response = await api.getMedia();
+      setAllMedia(response);
+    } catch (err) {
+      console.error("Failed to fetch media for thumbnails:", err);
     }
   };
 
@@ -96,17 +112,19 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-2">Loading...</p>
+      <BackgroundLayer >
+        <div className="flex items-center justify-center min-h-screen">
+          <LiquidGlass className="text-center" padding="32px 48px">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+            <p className="mt-2 text-white/80">Loading...</p>
+          </LiquidGlass>
         </div>
-      </div>
+      </BackgroundLayer>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <BackgroundLayer >
       <Header
         userEmail={authState.user?.email}
         onSignOut={() => {
@@ -116,57 +134,105 @@ function App() {
         }}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <LiquidGlass className="mb-4" cornerRadius={12} padding="16px">
+            <div className="flex items-center gap-3 text-red-300">
+              <AlertCircle className="h-5 w-5" />
+              <span>{error}</span>
+            </div>
+          </LiquidGlass>
         )}
 
         {!authState.isAuthenticated ? (
-          <AuthForm
-            onAuthSuccess={() => {
-              checkAuth().catch((err) => {
-                setError(
-                  err instanceof Error ? err.message : "Authentication failed"
-                );
-              });
-            }}
-          />
+          <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+            <AuthForm
+              onAuthSuccess={() => {
+                checkAuth().catch((err) => {
+                  setError(
+                    err instanceof Error ? err.message : "Authentication failed"
+                  );
+                });
+              }}
+            />
+          </div>
         ) : (
           <div>
             {!selectedPalace ? (
               <PalaceList
                 palaces={palaces}
                 isLoading={isLoading}
-                onManagePalace={handleManagePalace} // Use the new handler
+                onManagePalace={handleManagePalace}
                 onCreatePalace={handleCreatePalace}
                 onRenamePalace={handleRenamePalace}
+                media={allMedia}
               />
             ) : (
-              <div>
-                <div className="mb-6">
-                  <Button
-                    variant="outline"
-                    onClick={() => setSelectedPalace(null)}
-                    className="mb-10 flex items-center gap-2"
-                  >
-                    ← Back to All Palaces
-                  </Button>
-                  <h2 className="text-2xl font-bold">{selectedPalace.name}</h2>
+              <div className="space-y-2">
+                {/* Header with back button and stats */}
+                <div className="flex items-center justify-between gap-4">
+                  <LiquidGlass className="inline-block" cornerRadius={24} padding="12px 20px">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setSelectedPalace(null)}
+                        className="text-white/70 hover:text-white transition-colors flex items-center gap-2"
+                      >
+                        ← Back
+                      </button>
+                      <div className="w-px h-5 bg-white/20" />
+                      <h2 className="text-lg font-semibold text-white">{selectedPalace.name}</h2>
+                    </div>
+                  </LiquidGlass>
+                  
+                  {palaceStats && (
+                    <LiquidGlass className="inline-block" cornerRadius={16} padding="10px 16px">
+                      <div className="flex items-center gap-3 text-white/80 text-sm">
+                        <span>{palaceStats.spheres} spheres</span>
+                        <div className="w-px h-4 bg-white/20" />
+                        <span>{palaceStats.connections} connections</span>
+                      </div>
+                    </LiquidGlass>
+                  )}
                 </div>
-                <SpheresGrid
+
+                {/* 3D Palace Viewer */}
+                <PalaceViewer3D
                   palace={selectedPalace}
                   api={api}
                   onError={setError}
+                  onDataLoaded={(spheres, connections) => setPalaceStats({ spheres, connections })}
                 />
+
+                {/* Media Management Grid */}
+                <LiquidGlass className="w-full" cornerRadius={32} padding="24px">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Media Management</h3>
+                      <span className="text-sm text-white/50">{mediaCount} items</span>
+                    </div>
+                    <Button 
+                      variant="glass" 
+                      className="cursor-pointer"
+                      onClick={() => spheresGridRef.current?.triggerUpload()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Media
+                    </Button>
+                  </div>
+                  <SpheresGrid
+                    ref={spheresGridRef}
+                    palace={selectedPalace}
+                    api={api}
+                    onError={setError}
+                    onMediaCountChange={setMediaCount}
+                  />
+                </LiquidGlass>
               </div>
             )}
           </div>
         )}
       </main>
-    </div>
+    </BackgroundLayer>
   );
 }
 

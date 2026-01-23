@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +27,11 @@ interface SpheresGridProps {
   palace: Palace;
   api: ApiClient;
   onError: (error: string) => void;
+  onMediaCountChange?: (count: number) => void;
+}
+
+export interface SpheresGridHandle {
+  triggerUpload: () => void;
 }
 
 interface UploadState extends UploadProgress {
@@ -46,11 +51,14 @@ type StatusConfig = {
   animate: string;
 };
 
-export const SpheresGrid: React.FC<SpheresGridProps> = ({
+export const SpheresGrid = forwardRef<SpheresGridHandle, SpheresGridProps>(({
   palace,
   api,
   onError,
-}) => {
+  onMediaCountChange,
+}, ref) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   /** 
    * Instead of `isLoading`, we name it `isInitialLoading` to clarify that 
    * it should only be used for the first fetch (so we avoid 
@@ -61,6 +69,13 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
   const [uploads, setUploads] = useState<UploadState[]>([]);
   const [mediaToDelete, setMediaToDelete] = useState<Media | null>(null);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  
+  // Expose triggerUpload method to parent via ref
+  useImperativeHandle(ref, () => ({
+    triggerUpload: () => {
+      fileInputRef.current?.click();
+    }
+  }));
 
   /**
    * For exponential backoff, track current polling delays in state.
@@ -108,6 +123,11 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
       fetchAllMediaOnce();
     }
   }, [fetchAllMediaOnce, palace?.id]);
+
+  // Notify parent of media count changes
+  useEffect(() => {
+    onMediaCountChange?.(mediaItems.length);
+  }, [mediaItems.length, onMediaCountChange]);
 
   /**
    * Instead of refetching the entire list for updates, we do partial merges:
@@ -386,43 +406,43 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
   const getStatusConfig = (status: MediaStatus): StatusConfig => {
     const configs: Record<MediaStatus, StatusConfig> = {
       pending: {
-        bgColor: "bg-yellow-100",
-        textColor: "text-yellow-700",
+        bgColor: "bg-yellow-500/20 border border-yellow-500/30 backdrop-blur-sm",
+        textColor: "text-yellow-300",
         Icon: RefreshCw,
         text: "Processing",
         animate: "animate-spin",
       },
       processing: {
-        bgColor: "bg-yellow-100",
-        textColor: "text-yellow-700",
+        bgColor: "bg-yellow-500/20 border border-yellow-500/30 backdrop-blur-sm",
+        textColor: "text-yellow-300",
         Icon: RefreshCw,
         text: "Processing",
         animate: "animate-spin",
       },
       uploading: {
-        bgColor: "bg-blue-100",
-        textColor: "text-blue-700",
+        bgColor: "bg-blue-500/20 border border-blue-500/30 backdrop-blur-sm",
+        textColor: "text-blue-300",
         Icon: Upload,
         text: "Uploading",
         animate: "animate-pulse",
       },
       ready: {
-        bgColor: "bg-green-100",
-        textColor: "text-green-700",
+        bgColor: "bg-green-500/30 border border-green-500/40 backdrop-blur-sm",
+        textColor: "text-green-400",
         Icon: CheckCircle,
-        text: "Ready",
+        text: "",
         animate: "",
       },
       error: {
-        bgColor: "bg-red-100",
-        textColor: "text-red-700",
+        bgColor: "bg-red-500/20 border border-red-500/30 backdrop-blur-sm",
+        textColor: "text-red-300",
         Icon: AlertCircle,
         text: "Error",
         animate: "",
       },
       deleted: {
-        bgColor: "bg-gray-100",
-        textColor: "text-gray-700",
+        bgColor: "bg-white/10 border border-white/20 backdrop-blur-sm",
+        textColor: "text-white/60",
         Icon: AlertCircle,
         text: "Deleted",
         animate: "",
@@ -451,45 +471,30 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
 
   // MAIN RENDER
   return (
-    <div className="space-y-6">
-      {/* Header row */}
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">
-          {`Media Items: ${mediaItems.length}`}
-        </h3>
-        <div>
-          {/* Hidden file input + label as a button */}
-          <input
-            type="file"
-            multiple
-            onChange={handleFileUpload}
-            className="hidden"
-            id="file-upload"
-            accept="image/*,video/*"
-          />
-          <label htmlFor="file-upload">
-            <Button variant="outline" className="cursor-pointer" asChild>
-              <span>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Media
-              </span>
-            </Button>
-          </label>
-        </div>
-      </div>
+    <div>
+      {/* Hidden file input for upload (outside flow) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={handleFileUpload}
+        className="hidden absolute"
+        accept="image/*,video/*"
+      />
 
       {/* Upload Progress Panel */}
       {showUploadPanel &&
         uploads.length > 0 &&
         !uploads.every((u) => u.status === "ready") && (
-          <Card>
+          <Card className="bg-white/5 border-white/10 backdrop-blur-md">
             <CardContent className="p-4">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="font-medium">Uploads in Progress</h4>
+                <h4 className="font-medium text-white">Uploads in Progress</h4>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setShowUploadPanel(false)}
+                  className="text-white/50 hover:text-white hover:bg-white/10"
                 >
                   <XIcon className="h-4 w-4" />
                 </Button>
@@ -501,16 +506,16 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
                     className="space-y-2"
                   >
                     <div className="flex justify-between text-sm">
-                      <span className="truncate">{upload.filename}</span>
+                      <span className="truncate text-white/80">{upload.filename}</span>
                       <span
                         className={
                           upload.status === "error"
-                            ? "text-red-500"
+                            ? "text-red-400"
                             : upload.status === "processing"
-                            ? "text-yellow-500"
+                            ? "text-yellow-400"
                             : upload.status === "ready"
-                            ? "text-green-500"
-                            : "text-blue-500"
+                            ? "text-green-400"
+                            : "text-blue-400"
                         }
                       >
                         {upload.status === "error"
@@ -526,16 +531,16 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
                       value={upload.status === "ready" ? 100 : upload.progress}
                       className={
                         upload.status === "error"
-                          ? "bg-red-200"
+                          ? "bg-red-500/20"
                           : upload.status === "processing"
-                          ? "bg-yellow-200"
+                          ? "bg-yellow-500/20"
                           : upload.status === "ready"
-                          ? "bg-green-200"
-                          : "bg-blue-200"
+                          ? "bg-green-500/20"
+                          : "bg-blue-500/20"
                       }
                     />
                     {upload.error && (
-                      <div className="text-sm text-red-500">{upload.error}</div>
+                      <div className="text-sm text-red-400">{upload.error}</div>
                     )}
                   </div>
                 ))}
@@ -545,35 +550,35 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
         )}
 
       {/* Media Items Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {mediaItems.map((media) => {
           const statusCfg = getStatusConfig(media.status);
 
           return (
-            <Card key={`media-${media.id}`} className="relative overflow-hidden">
-              <CardContent className="p-4">
+            <Card key={`media-${media.id}`} className="relative overflow-hidden bg-white/5 border-white/10 backdrop-blur-md">
+              <CardContent className="p-2.5">
                 {/* Status badge */}
                 <div
-                  className={`absolute top-2 right-2 flex items-center gap-2 
+                  className={`absolute top-2 right-2 flex items-center gap-1.5 
                     ${statusCfg.bgColor} 
                     ${statusCfg.textColor} 
-                    px-2 py-1 rounded z-10`}
+                    ${statusCfg.text ? 'px-2.5 py-1' : 'p-1.5'} rounded-xl text-xs z-10`}
                 >
                   {React.createElement(statusCfg.Icon, {
-                    className: `h-4 w-4 ${statusCfg.animate}`,
+                    className: `h-3.5 w-3.5 ${statusCfg.animate}`,
                   })}
-                  <span>{statusCfg.text}</span>
+                  {statusCfg.text && <span>{statusCfg.text}</span>}
                 </div>
 
                 {/* Thumbnail or placeholder */}
-                <div className="aspect-video bg-gray-100 rounded flex items-center justify-center mb-4 relative">
+                <div className="aspect-video bg-white/10 rounded-xl flex items-center justify-center mb-2 relative overflow-hidden">
                   {/* If "ready" and we have a thumbnail, display it */}
                   {media.status === "ready" && media.thumbnailUrl ? (
                     <img
                       src={media.thumbnailUrl}
                       alt={media.filename}
                       crossOrigin="anonymous"
-                      className="w-full h-full object-cover rounded"
+                      className="w-full h-full object-cover rounded-xl"
                       onError={(e) => {
                         console.error("Thumbnail load error:", {
                           mediaId: media.id,
@@ -585,25 +590,25 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
                     />
                   ) : (
                     // Otherwise a fallback
-                    <div className="flex flex-col items-center justify-center text-gray-400 h-full w-full text-center">
+                    <div className="flex flex-col items-center justify-center text-white/40 h-full w-full text-center">
                       {media.status === "uploading" ||
                       media.status === "processing" ||
                       media.status === "pending" ? (
                         <>
-                          <RefreshCw className="h-6 w-6 animate-spin mb-2" />
-                          <p className="text-sm text-gray-500">
+                          <RefreshCw className="h-5 w-5 animate-spin mb-1" />
+                          <p className="text-xs text-white/50">
                             {media.status === "uploading"
                               ? "Uploading..."
                               : "Processing..."}
                           </p>
                         </>
                       ) : media.status === "error" ? (
-                        <div className="text-red-500 flex items-center gap-2">
-                          <AlertCircle className="h-5 w-5" />
-                          <span>Error loading media</span>
+                        <div className="text-red-400 flex items-center gap-1.5 text-xs">
+                          <AlertCircle className="h-4 w-4" />
+                          <span>Error</span>
                         </div>
                       ) : (
-                        <div>Loading Thumbnail...</div>
+                        <div className="text-xs">Loading...</div>
                       )}
                     </div>
                   )}
@@ -612,7 +617,7 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
                   {media.type === "video" &&
                     media.duration &&
                     media.status === "ready" && (
-                      <div className="absolute bottom-2 right-2 bg-black/75 text-white px-2 py-0.5 rounded text-xs">
+                      <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-lg text-[10px] border border-white/10">
                         {Math.floor(media.duration / 60)}:
                         {String(Math.floor(media.duration % 60)).padStart(2, "0")}
                       </div>
@@ -620,37 +625,35 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
                 </div>
 
                 {/* Media Info */}
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1">
                   {/* Filename + Type */}
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       {media.type === "video" && (
-                        <div className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                        <div className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-lg border border-blue-500/30 shrink-0">
                           Video
                         </div>
                       )}
                       <div
-                        className="font-medium truncate"
+                        className="text-xs font-medium truncate text-white"
                         title={media.filename}
                       >
-                        {media.filename.length > 20
-                          ? `${media.filename.slice(0, 20)}...`
+                        {media.filename.length > 18
+                          ? `${media.filename.slice(0, 18)}...`
                           : media.filename}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                    <button
                       onClick={() => setMediaToDelete(media)}
-                      className="hover:bg-red-50 hover:text-red-500"
+                      className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-white/40 transition-colors shrink-0"
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
 
                   {/* Resolution, size, etc. */}
-                  <div className="text-sm text-gray-500">
-                    <div className="flex items-center gap-2">
+                  <div className="text-[11px] text-white/40">
+                    <div className="flex items-center gap-1.5">
                       {media.width && media.height && (
                         <span>
                           {media.width}×{media.height}
@@ -688,7 +691,7 @@ export const SpheresGrid: React.FC<SpheresGridProps> = ({
       </AlertDialog>
     </div>
   );
-};
+});
 
 export default SpheresGrid;
 

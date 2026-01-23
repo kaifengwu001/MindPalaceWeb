@@ -29,6 +29,8 @@ export interface Vector3 {
     rotation: Quaternion;
     scale: Vector3;
     mediaRef?: string;
+    // VisionPro app uses associatedFileName to link spheres to media files
+    associatedFileName?: string;
     description?: string;
     lastModified: number;
   }
@@ -80,4 +82,13 @@ export interface Vector3 {
     progress: number;
     status: MediaStatus;
     error?: string;
+  }
+
+  export interface Connection {
+    id: string;
+    palaceId: string;
+    startObjectId: string;
+    endObjectId: string;
+    comment?: string;
+    lastModified: number;
   }
