@@ -116,7 +116,7 @@ function calculateLineWidths(segments: number, baseWidth: number): number[] {
 function createTaperingRibbonGeometry(
   points: THREE.Vector3[],
   widths: number[],
-  camera: THREE.Vector3
+  _camera: THREE.Vector3
 ): THREE.BufferGeometry {
   const vertices: number[] = [];
   const indices: number[] = [];
@@ -145,7 +145,7 @@ function createTaperingRibbonGeometry(
     }
     
     // Also create vertical perpendicular for billboard effect
-    const vertSide = new THREE.Vector3().crossVectors(side, tangent).normalize();
+    const _vertSide = new THREE.Vector3().crossVectors(side, tangent).normalize();
     
     // Create two vertices at this point (one on each side)
     const halfWidth = width / 2;
