@@ -144,9 +144,6 @@ function createTaperingRibbonGeometry(
       side = new THREE.Vector3(1, 0, 0);
     }
     
-    // Also create vertical perpendicular for billboard effect
-    const _vertSide = new THREE.Vector3().crossVectors(side, tangent).normalize();
-    
     // Create two vertices at this point (one on each side)
     const halfWidth = width / 2;
     
